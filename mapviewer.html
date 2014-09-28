@@ -1,0 +1,243 @@
+<html>
+
+<head>
+<style type="text/css">
+  body {
+	background-color: #FFE9BF;
+  }	
+  #map {
+	max-width: 1080px;
+	height: 720px;
+	margin: auto;
+	background-color: #BFD481;
+	outline-style: solid;
+	outline-color: #624221;
+  }
+  #content {
+	max-width: 1080px;
+	height: 320px;
+	margin: auto;
+	padding: 10px;
+	font: 16px arial, sans-serif;
+	color: 624221;
+	text-align: center;
+  }
+</style>
+</head>
+	
+<body>
+
+<div id="map"></div>
+
+<div id="content"></div>
+
+<script src="js/sigma.min.js"></script>
+<script>
+  var client = new XMLHttpRequest();
+
+  client.overrideMimeType("text/javascript");
+  client.open('GET', 'http://tribblez.tribalhero.com/map.json', true);
+  client.onreadystatechange = function() {
+	if (client.readyState === 4) {
+	  var res = client.responseText;
+
+	  var jsonRes = JSON.parse(res, function (k, v) {
+		  if (k === "barbarian_tribes" || k === "forests") {
+			return undefined;
+		  }
+		  return v;
+	  });
+
+	  var sig = new sigma({
+		container: 'map',
+		settings: {
+		  defaultLabelColor: '#73675A',
+		  defaultNodeColor: '#ec5148',
+		  defaultHoverLabelBGColor: '#FFF1D3',
+		  labelThreshold: 5.5,
+		  labelHoverShadowColor:  '#A6BA68',
+		  font: "helvetica",
+		  borderSize: 1,
+		  batchEdgesDrawing: true,
+		  defaultNodeBorderColor: '#73675A'
+		}
+	  });
+
+	  var tribes = [];
+	  var players = [];
+	  var playersRev = [];
+	  var playerTribes = [];
+	  var tribeColors = [];
+
+	  var colorCounter = 0;
+	  var colors = [
+		  '#FFB300',
+		  '#803E75',
+		  '#FF6800',
+		  '#A6BDD7',
+		  '#C10020',
+		  '#CEA262',
+		  '#817066',
+
+		  '#007D34',
+		  '#F6768E',
+		  '#00538A',
+		  '#FF7A5C',
+		  '#53377A',
+		  '#FF8E00',
+		  '#B32851',
+		  '#F4C800',
+		  '#7F180D',
+		  '#93AA00',
+		  '#593315',
+		  '#F13A13',
+		  '#232C16'
+		  ];
+
+	  for (i = 0; i < jsonRes.players.length; i++) {
+		var pl = jsonRes.players[i];
+		players[pl.id] = pl.name;
+		playersRev[pl.name] = pl.id;
+		if (!pl.tribe_id) continue;
+		playerTribes[pl.id] = pl.tribe_id;
+	  }
+	  
+	  for (i = 0; i < jsonRes.tribes.length; i++) {
+		var tr = jsonRes.tribes[i];
+		var id = playerTribes[tr.owner_player_id];
+		tribes[id] = tr.name;
+		if ((tr.level == 1 && ~~tr.victory_points === 0) || colorCounter == colors.length) continue;
+		tribeColors[id] = colors[colorCounter];
+		colorCounter++;
+	  }
+
+	  for (i = 0; i < jsonRes.cities.length; i++) {
+		var city = jsonRes.cities[i];
+		  sig.graph.addNode({
+			id: city.name,
+			label: city.name,
+			x: city.x,
+			y: city.y,
+			size: 0.08,
+			color: (!playerTribes[city.player_id] || !tribeColors[playerTribes[city.player_id]]) ? '#D6F1BB' : tribeColors[playerTribes[city.player_id]],
+			player: players[city.player_id],
+			tribe: tribes[playerTribes[city.player_id]],
+			long_label: city.name + " - Player: " + players[city.player_id] + " Tribe: " + tribes[playerTribes[city.player_id]],
+			group_by: 'player',
+			json: city
+		  });
+	  }
+
+	  for (i = 0; i < jsonRes.strongholds.length; i++) {
+		var sh = jsonRes.strongholds[i];
+		  sig.graph.addNode({
+			id: sh.name,
+			label: sh.name,
+			x: sh.x,
+			y: sh.y,
+			size: 0.25 * ~~Math.max(1, (sh.level / 6)),
+			color: '#FFCC00',
+			tribe: tribes[sh.owner_tribe_id],
+			long_label: sh.name + " - Level: " + sh.level + " VPR: " + ~~sh.victory_point_rate + " Tribe: " + tribes[sh.owner_tribe_id],
+			group_by: 'tribe',
+			json: sh
+		  });
+	  }
+	  
+	  var selected_node;
+	  
+	  function reset_selected_node() {
+		if (!selected_node) return;
+		selected_node.label = selected_node.id;
+	  }
+	  
+	  function add_tribe_edges(root_node) {
+		if (sig.graph.edges().length !== 0) return;
+		if (!root_node.tribe) return;
+		var nodes = sig.graph.nodes();
+		for (i = 0; i < nodes.length; i++) {
+			var check_node = nodes[i];
+			if (check_node.id === root_node.id || check_node.tribe !== root_node.tribe) continue;
+			sig.graph.addEdge({
+				id: 'e' + i,
+				source: check_node.id,
+				target: root_node.id
+			});
+		}
+	  }
+	  
+	  function add_player_edges(root_node) {
+		if (sig.graph.edges().length !== 0) return;
+		var nodes = sig.graph.nodes();
+		for (i = 0; i < nodes.length; i++) {
+			var check_node = nodes[i];
+			if (check_node.id === root_node.id || check_node.player !== root_node.player) continue;
+			sig.graph.addEdge({
+				id: 'e' + i,
+				source: check_node.id,
+				target: root_node.id
+			});
+		}
+	  }
+	  
+	  function reset_all_edges() {
+		sig.graph.edges().forEach(function(e) {
+			sig.graph.dropEdge(e.id);
+		});
+	  }
+	  
+	  function display_selected_info() {
+		if (!selected_node) return;
+		document.getElementById("content").innerHTML =
+				[selected_node.id,
+				'<br>X: ' + selected_node.x,
+				'<br>Y: ' + selected_node.y,
+				].join('\n');
+	  }
+	  
+	  function generate_stronghold_info() {
+		
+	  }
+	  
+	  function generate_city_info() {
+		
+	  }
+	  
+	  function generate_tribe_info() {
+		
+	  }
+	  
+	  function generate_player_info() {
+		
+	  }
+	  
+	  function reset_selected_info() {
+		document.getElementById("content").innerHTML = "";
+	  }
+	  
+	  sig.bind('overNode', function(e) {
+		reset_selected_node();
+		e.data.node.label = e.data.node.long_label;
+		selected_node = e.data.node;
+		if (e.data.node.group_by === 'tribe') add_tribe_edges(e.data.node);
+		if (e.data.node.group_by === 'player') add_player_edges(e.data.node);
+		display_selected_info();
+		sig.refresh();
+	  });
+		
+	  sig.bind('outNode', function(e) {
+		reset_selected_node();
+		reset_all_edges();
+		reset_selected_info();
+		sig.refresh();
+	  });
+
+	  sig.refresh();
+	}
+  };
+  client.send();    
+</script>
+	
+</body>
+
+</html>
