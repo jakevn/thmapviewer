@@ -188,26 +188,42 @@
 	  
 	  function display_selected_info() {
 		if (!selected_node) return;
-		document.getElementById("content").innerHTML =
-				[selected_node.id,
-				'<br>X: ' + selected_node.x,
-				'<br>Y: ' + selected_node.y,
+		var gen = '';
+		if (selected_node.json.date_occupied) gen = generate_stronghold_info(selected_node);
+		else if (selected_node.json.radius) gen = generate_city_info(selected_node);
+		document.getElementById("content").innerHTML = gen;
+	  }
+	  
+	  function generate_stronghold_info(s) {
+		return ['Stronghold: ' + s.id,
+				'<br>Level: ' + s.json.level,
+				'<br>Tribe: ' + (!s.tribe ? 'None' : s.tribe),
+				'<br>VPR: ' + (!s.tribe ? 'N/A' : ~~s.json.victory_point_rate),
+				'<br>X: ' + s.x,
+				'<br>Y: ' + s.y,
+				'<br>Gate Max HP: ' + s.json.gate_max
 				].join('\n');
 	  }
 	  
-	  function generate_stronghold_info() {
+	  function generate_city_info(c) {
+		return ['City: ' + c.id,
+				'<br>Player: ' + c.player,
+				'<br>Tribe: ' + (!c.tribe ? 'None' : c.tribe),
+				'<br>X: ' + c.x,
+				'<br>Y: ' + c.y,
+				'<br>Value: ' + c.json.value,
+				'<br>Loot Stolen: ' + c.json.loot_stolen,
+				'<br>Attack: ' + c.json.attack_points,
+				'<br>Defense: ' + c.json.defense_point,
+				'<br>Deployed Troops: ' + c.json.troops.length
+				].join('\n');
+	  }
+	  
+	  function generate_tribe_info(t) {
 		
 	  }
 	  
-	  function generate_city_info() {
-		
-	  }
-	  
-	  function generate_tribe_info() {
-		
-	  }
-	  
-	  function generate_player_info() {
+	  function generate_player_info(p) {
 		
 	  }
 	  
