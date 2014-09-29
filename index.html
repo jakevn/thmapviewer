@@ -13,14 +13,27 @@
 	outline-style: solid;
 	outline-color: #624221;
   }
-  #content {
+  .content {
 	max-width: 1080px;
 	height: 320px;
 	margin: auto;
-	padding: 10px;
+	padding: 6px;
 	font: 16px arial, sans-serif;
 	color: 624221;
-	text-align: center;
+	text-align: left;
+  }
+  #column1 {
+	float: left;
+    width: 300px;
+  }
+  #column2 {
+	margin-left: auto;
+    margin-right: auto;
+	width: 300px;
+  }
+  #column3 {
+	float: right;
+	width: 300px;
   }
 </style>
 </head>
@@ -28,8 +41,11 @@
 <body>
 
 <div id="map"></div>
-
-<div id="content"></div>
+<div class = "content">
+<p id="column1"></p>
+<p id="column2"></p>
+<p id="column3"></p>
+</div>
 
 <script src="js/sigma.min.js"></script>
 <script>
@@ -101,6 +117,7 @@
 		if (!pl.tribe_id) continue;
 		playerTribes[pl.id] = pl.tribe_id;
 	  }
+	  var tribe_legend = '';
 	  
 	  for (i = 0; i < jsonRes.tribes.length; i++) {
 		var tr = jsonRes.tribes[i];
@@ -108,9 +125,11 @@
 		tribes[id] = tr.name;
 		if ((tr.level == 1 && ~~tr.victory_points === 0) || colorCounter == colors.length) continue;
 		tribeColors[id] = colors[colorCounter];
+		tribe_legend += '<b><font color=\"' + colors[colorCounter] + '\"> ' + tr.name + "</font></b><br>";
+		tribe_legend += 'Level: ' + tr.level + ' AP: ' + tr.attack_points + ' DP: ' + tr.defense_points + ' VP: ' + ~~tr.victory_points + '<br>';
 		colorCounter++;
 	  }
-
+	  document.getElementById("column1").innerHTML = tribe_legend;
 	  for (i = 0; i < jsonRes.cities.length; i++) {
 		var city = jsonRes.cities[i];
 		  sig.graph.addNode({
@@ -191,7 +210,7 @@
 		var gen = '';
 		if (selected_node.json.date_occupied) gen = generate_stronghold_info(selected_node);
 		else if (selected_node.json.radius) gen = generate_city_info(selected_node);
-		document.getElementById("content").innerHTML = gen;
+		document.getElementById("column2").innerHTML = gen;
 	  }
 	  
 	  function generate_stronghold_info(s) {
@@ -201,7 +220,8 @@
 				'<br>VPR: ' + (!s.tribe ? 'N/A' : ~~s.json.victory_point_rate),
 				'<br>X: ' + s.x,
 				'<br>Y: ' + s.y,
-				'<br>Gate Max HP: ' + s.json.gate_max
+				'<br>Gate Max HP: ' + s.json.gate_max,
+				'<br>Days Occupied: ' + (!s.tribe ? 'N/A' : elapsed_days(s.json.date_occupied)),
 				].join('\n');
 	  }
 	  
@@ -219,6 +239,14 @@
 				].join('\n');
 	  }
 	  
+	  function elapsed_days(date_string) {
+		var unix_past = Date.parse(date_string);
+		var unix_present = new Date().getTime();
+		var diff = unix_present - unix_past;
+		var days = (diff / (1000*60*60*24)).toString();
+		return days.length > 4 ? days.substr(0, 4) : days;
+	  }
+	  
 	  function generate_tribe_info(t) {
 		
 	  }
@@ -228,7 +256,7 @@
 	  }
 	  
 	  function reset_selected_info() {
-		document.getElementById("content").innerHTML = "";
+		document.getElementById("column2").innerHTML = '';
 	  }
 	  
 	  sig.bind('overNode', function(e) {
