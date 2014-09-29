@@ -109,8 +109,7 @@
           '#7F180D',
           '#93AA00',
           '#593315',
-          '#F13A13',
-          '#232C16'
+          '#F13A13'
           ];
 
       for (i = 0; i < jsonRes.players.length; i++) {
@@ -182,6 +181,12 @@
         var nodes = sig.graph.nodes();
         for (i = 0; i < nodes.length; i++) {
             var check_node = nodes[i];
+			if (check_node.id === calc1.id) sig.graph.addEdge({
+                id: 'es' + i,
+                source: check_node.id,
+                target: root_node.id,
+				color: '#232C16'
+            });
             if (check_node.id === root_node.id || check_node.tribe !== root_node.tribe) continue;
             sig.graph.addEdge({
                 id: 'e' + i,
@@ -196,6 +201,12 @@
         var nodes = sig.graph.nodes();
         for (i = 0; i < nodes.length; i++) {
             var check_node = nodes[i];
+			if (check_node.id === calc1.id) sig.graph.addEdge({
+                id: 'es' + i,
+                source: check_node.id,
+                target: root_node.id,
+				color: '#232C16'
+            });
             if (check_node.id === root_node.id || check_node.player !== root_node.player) continue;
             sig.graph.addEdge({
                 id: 'e' + i,
