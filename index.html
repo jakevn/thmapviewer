@@ -1,6 +1,8 @@
 <html>
 
 <head>
+<title>Tribal Hero Map Viewer</title>
+<meta charset="utf-8"></meta>
 <style type="text/css">
   body {
     background-color: #FFE9BF;
@@ -262,6 +264,7 @@
         if (e.data.node.group_by === 'tribe') add_tribe_edges(e.data.node);
         if (e.data.node.group_by === 'player') add_player_edges(e.data.node);
         display_selected_info();
+		if (calc1 && e.data.node != calc1) hover_during_selected(e.data.node);
         sig.refresh();
       });
         
@@ -272,24 +275,22 @@
         sig.refresh();
       });
 	  
-	  document.getElementById("column3").innerHTML = 'Click two different nodes to calculate the distance between them.';
+	  document.getElementById("column3").innerHTML = 'Click a node to calculate distance.';
 	  var calc1;
 	  
 	  sig.bind('clickNode', function(e) {
-		if (!calc1) first_calc_clicked(e.data.node);
-		else second_calc_clicked(e.data.node);
+		first_calc_clicked(e.data.node);
 	  });
 	  
 	  function first_calc_clicked(n) {
 		calc1 = n;
 		document.getElementById("column3").innerHTML = 
-			'Click another node to calculate distance. Currently selected: <b>' + n.id + '</b>';
+			'Hover over another node to calculate distance. Currently selected: <b>' + n.id + '</b>';
 	  }
 	  
-	  function second_calc_clicked(n) {
+	  function hover_during_selected(n) {
 		document.getElementById("column3").innerHTML = 
 		    'Distance from <b>' + calc1.id + ' </b> to <b>' + n.id + ': ' + calc_distance(calc1.x, n.x, calc1.json.y, n.json.y);
-		calc1 = null;
 	  }
 	  
 	  function calc_distance(x, x1, y, y1) {
