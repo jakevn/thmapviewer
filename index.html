@@ -292,8 +292,14 @@
 		calc1 = null;
 	  }
 	  
-	  function calc_distance(x1, x2, y1, y2) {
-	    return Math.abs(x1-x2 + (y1-y2)/2 + ((y1%2==0&&y2%2!=0)||(y1%2!=0&&y2%2==0)));
+	  function calc_distance(x, x1, y, y1) {
+	    var offset = 0;
+           if ((y % 2 == 1 && y1 % 2 == 0 && x1 <= x) ||
+               (y % 2 == 0 && y1 % 2 == 1 && x1 >= x))
+           {
+               offset = 1;
+           }
+           return ~~((x1 > x ? x1 - x : x - x1) + (y1 > y ? y1 - y : y - y1) / 2 + offset);
 	  }
 
       sig.refresh();
