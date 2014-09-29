@@ -16,13 +16,13 @@
   .content {
     max-width: 1080px;
     height: 320px;
-    margin: auto;
-    padding: 6px;
+    padding: 3px;
+	margin: auto;
     color: 624221;
     text-align: left;
   }
   #column1 {
-	font: 13px arial, sans-serif;
+    font: 13px arial, sans-serif;
     float: left;
     width: 300px;
   }
@@ -30,11 +30,11 @@
     font: 18px arial, sans-serif;
     margin-left: auto;
     margin-right: auto;
-    width: 300px;
+    width: 240px;
   }
   #column3 {
-    float: right;
-    width: 300px;
+    text-align: center;
+    font: 16px arial, sans-serif;
   }
 </style>
 </head>
@@ -43,9 +43,9 @@
 
 <div id="map"></div>
 <div class = "content">
+<p id="column3"></p>
 <p id="column1"></p>
 <p id="column2"></p>
-<p id="column3"></p>
 </div>
 
 <script src="js/sigma.min.js"></script>
@@ -251,14 +251,6 @@
         return days.length > 4 ? days.substr(0, 4) : days;
       }
       
-      function generate_tribe_info(t) {
-        
-      }
-      
-      function generate_player_info(p) {
-        
-      }
-      
       function reset_selected_info() {
         document.getElementById("column2").innerHTML = '';
       }
@@ -279,6 +271,30 @@
         reset_selected_info();
         sig.refresh();
       });
+	  
+	  document.getElementById("column3").innerHTML = 'Click two different nodes to calculate the distance between them.';
+	  var calc1;
+	  
+	  sig.bind('clickNode', function(e) {
+		if (!calc1) first_calc_clicked(e.data.node);
+		else second_calc_clicked(e.data.node);
+	  });
+	  
+	  function first_calc_clicked(n) {
+		calc1 = n;
+		document.getElementById("column3").innerHTML = 
+			'Click another node to calculate distance. Currently selected: <b>' + n.id + '</b>';
+	  }
+	  
+	  function second_calc_clicked(n) {
+		document.getElementById("column3").innerHTML = 
+		    'Distance from <b>' + calc1.id + ' </b> to <b>' + n.id + ': ' + calc_distance(calc1.x, n.x, calc1.json.y, n.json.y);
+		calc1 = null;
+	  }
+	  
+	  function calc_distance(x1, x2, y1, y2) {
+	    return Math.abs(x1-x2 + (y1-y2)/2 + ((y1%2==0&&y2%2!=0)||(y1%2!=0&&y2%2==0)));
+	  }
 
       sig.refresh();
     }
