@@ -38,6 +38,9 @@
     text-align: center;
     font: 16px arial, sans-serif;
   }
+  #column4 {
+	float: right;
+  }
 </style>
 </head>
     
@@ -48,6 +51,9 @@
 <p id="column3"></p>
 <p id="column1"></p>
 <p id="column2"></p>
+<p id="column4">
+
+</p>
 </div>
 
 <script src="js/sigma.min.js"></script>
@@ -181,7 +187,7 @@
         var nodes = sig.graph.nodes();
         for (i = 0; i < nodes.length; i++) {
             var check_node = nodes[i];
-			if (check_node.id === calc1.id) sig.graph.addEdge({
+			if (calc1 && (check_node.id === calc1.id)) sig.graph.addEdge({
                 id: 'es' + i,
                 source: check_node.id,
                 target: root_node.id,
@@ -201,7 +207,7 @@
         var nodes = sig.graph.nodes();
         for (i = 0; i < nodes.length; i++) {
             var check_node = nodes[i];
-			if (check_node.id === calc1.id) sig.graph.addEdge({
+			if (calc1 && (check_node.id === calc1.id)) sig.graph.addEdge({
                 id: 'es' + i,
                 source: check_node.id,
                 target: root_node.id,
@@ -276,6 +282,8 @@
         if (e.data.node.group_by === 'player') add_player_edges(e.data.node);
         display_selected_info();
 		if (calc1 && e.data.node != calc1) hover_during_selected(e.data.node);
+		//sigma.utils.zoomTo(sig.camera, e.data.node.x, e.data.node.y, 0);
+		//sig.camera.goTo({x: 0, y: 0});
         sig.refresh();
       });
         
