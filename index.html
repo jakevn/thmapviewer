@@ -189,7 +189,7 @@
         var nodes = sig.graph.nodes();
         for (i = 0; i < nodes.length; i++) {
             var check_node = nodes[i];
-            if (click_selected && (check_node.id === click_selected.id) && click_selected != check_node) sig.graph.addEdge({
+            if (click_selected && click_selected != hover_selected && (check_node.id === click_selected.id)) sig.graph.addEdge({
                 id: 'es' + i,
                 source: check_node.id,
                 target: root_node.id,
@@ -210,7 +210,7 @@
         var nodes = sig.graph.nodes();
         for (i = 0; i < nodes.length; i++) {
             var check_node = nodes[i];
-            if (click_selected && (check_node.id === click_selected.id) && click_selected != check_node) sig.graph.addEdge({
+            if (click_selected && click_selected != hover_selected && (check_node.id === click_selected.id)) sig.graph.addEdge({
                 id: 'es' + i,
                 source: check_node.id,
                 target: root_node.id,
