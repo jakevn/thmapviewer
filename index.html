@@ -184,17 +184,10 @@
       
       /* Iterates through all nodes and generates edges to the hover-selected node if in same tribe. */
       function add_tribe_edges(root_node) {
-        if (sig.graph.edges().length !== 0) return;
         if (!root_node.tribe) return;
         var nodes = sig.graph.nodes();
         for (i = 0; i < nodes.length; i++) {
             var check_node = nodes[i];
-            if (click_selected && click_selected != hover_selected && (check_node.id === click_selected.id)) sig.graph.addEdge({
-                id: 'es' + i,
-                source: check_node.id,
-                target: root_node.id,
-                color: '#232C16'
-            });
             if (check_node.id === root_node.id || check_node.tribe !== root_node.tribe) continue;
             sig.graph.addEdge({
                 id: 'e' + i,
@@ -206,16 +199,9 @@
       
       /* Iterates through all nodes and generates edges to the hover-selected node if city owned by same Player. */
       function add_player_edges(root_node) {
-        if (sig.graph.edges().length !== 0) return;
         var nodes = sig.graph.nodes();
         for (i = 0; i < nodes.length; i++) {
             var check_node = nodes[i];
-            if (click_selected && click_selected != hover_selected && (check_node.id === click_selected.id)) sig.graph.addEdge({
-                id: 'es' + i,
-                source: check_node.id,
-                target: root_node.id,
-                color: '#232C16'
-            });
             if (check_node.id === root_node.id || check_node.player !== root_node.player) continue;
             sig.graph.addEdge({
                 id: 'e' + i,
@@ -224,7 +210,17 @@
             });
         }
       }
-      
+	  
+      /* Generates a black edge between click_selected and hover_selected. */
+	  function add_distance_edge() {
+		sig.graph.addEdge({
+			id: 'edist',
+			source: click_selected.id,
+			target: hover_selected.id,
+			color: '#232C16'
+		});
+	  }
+	  
       /* Removes all edges from the graph. */
       function reset_all_edges() {
         sig.graph.edges().forEach(function(e) {
@@ -232,7 +228,7 @@
         });
       }
       
-      function display_selected_info() {
+      function display_hover_info() {
         if (!hover_selected) return;
         var gen = '';
         if (hover_selected.json.date_occupied) gen = generate_stronghold_info(hover_selected);
@@ -276,28 +272,24 @@
         return days.length > 4 ? days.substr(0, 4) : days;
       }
       
-      function reset_selected_info() {
-        document.getElementById("column2").innerHTML = '';
-      }
-      
       sig.bind('overNode', function(e) {
         reset_hover_selected();
 		hover_selected = e.data.node;
         hover_selected.label = hover_selected.long_label;
-        
+		
+        if (sig.graph.edges().length !== 0) return;
         if (hover_selected.group_by === 'tribe') add_tribe_edges(hover_selected);
         if (hover_selected.group_by === 'player') add_player_edges(hover_selected);
-        display_selected_info();
         if (click_selected && hover_selected != click_selected) show_distance(hover_selected);
-        //sigma.utils.zoomTo(sig.camera, e.data.node.x, e.data.node.y, 0);
-        //sig.camera.goTo({x: 0, y: 0});
+		
+		display_hover_info();
         sig.refresh();
       });
         
       sig.bind('outNode', function(e) {
         reset_hover_selected();
         reset_all_edges();
-        reset_selected_info();
+        document.getElementById("column2").innerHTML = '';
         sig.refresh();
       });
       
@@ -313,6 +305,7 @@
       
       /* Updates DOM to display the distance between click_selected and hover_selected node. */
       function show_distance(n) {
+	    add_distance_edge();
         document.getElementById("column3").innerHTML = 
             'Distance from <b>' + click_selected.id + ' </b> to <b>' + n.id + ': ' + calc_distance(click_selected.x, n.x, click_selected.json.y, n.json.y);
       }
