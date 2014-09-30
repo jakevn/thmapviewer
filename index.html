@@ -48,7 +48,7 @@
 
 <div id="map"></div>
 <div class = "content">
-<p id="column3"></p>
+<p id="column3"> Click a node to calculate distance. </p>
 <p id="column1"></p>
 <p id="column2"></p>
 <p id="column4">
@@ -174,13 +174,15 @@
           });
       }
       
-      var selected_node;
+      var hover_selected; // The current hover-selected node.
       
-      function reset_selected_node() {
-        if (!selected_node) return;
-        selected_node.label = selected_node.id;
+	  /* Resets the label for the node that was hover selected. */
+      function reset_hover_selected() {
+        if (!hover_selected) return;
+        hover_selected.label = hover_selected.id;
       }
       
+	  /* Iterates through all nodes and generates edges to the hover-selected node if in same tribe. */
       function add_tribe_edges(root_node) {
         if (sig.graph.edges().length !== 0) return;
         if (!root_node.tribe) return;
@@ -202,6 +204,7 @@
         }
       }
       
+	  /* Iterates through all nodes and generates edges to the hover-selected node if city owned by same Player. */
       function add_player_edges(root_node) {
         if (sig.graph.edges().length !== 0) return;
         var nodes = sig.graph.nodes();
@@ -222,6 +225,7 @@
         }
       }
       
+	  /* Removes all edges from the graph. */
       function reset_all_edges() {
         sig.graph.edges().forEach(function(e) {
             sig.graph.dropEdge(e.id);
@@ -229,10 +233,10 @@
       }
       
       function display_selected_info() {
-        if (!selected_node) return;
+        if (!hover_selected) return;
         var gen = '';
-        if (selected_node.json.date_occupied) gen = generate_stronghold_info(selected_node);
-        else if (selected_node.json.radius) gen = generate_city_info(selected_node);
+        if (hover_selected.json.date_occupied) gen = generate_stronghold_info(hover_selected);
+        else if (hover_selected.json.radius) gen = generate_city_info(hover_selected);
         document.getElementById("column2").innerHTML = gen;
       }
       
@@ -254,7 +258,8 @@
                 '<br>Tribe: ' + (!c.tribe ? 'None' : c.tribe),
                 '<br>X: ' + c.x,
                 '<br>Y: ' + c.y,
-                '<br>Value: ' + c.json.value,
+                '<br>IP: ' + c.json.value,
+				'<br>Expense: ' + c.json.expense_value,
                 '<br>Loot Stolen: ' + c.json.loot_stolen,
                 '<br>Attack: ' + c.json.attack_points,
                 '<br>Defense: ' + c.json.defense_point,
@@ -275,9 +280,9 @@
       }
       
       sig.bind('overNode', function(e) {
-        reset_selected_node();
+        reset_hover_selected();
         e.data.node.label = e.data.node.long_label;
-        selected_node = e.data.node;
+        hover_selected = e.data.node;
         if (e.data.node.group_by === 'tribe') add_tribe_edges(e.data.node);
         if (e.data.node.group_by === 'player') add_player_edges(e.data.node);
         display_selected_info();
@@ -288,30 +293,33 @@
       });
         
       sig.bind('outNode', function(e) {
-        reset_selected_node();
+        reset_hover_selected();
         reset_all_edges();
         reset_selected_info();
         sig.refresh();
       });
 	  
-	  document.getElementById("column3").innerHTML = 'Click a node to calculate distance.';
-	  var calc1;
+	  var calc1; // The current click-selected node.
 	  
+	  /* Binds to Sigma.js event triggered by clicking on a node. */
 	  sig.bind('clickNode', function(e) {
 		first_calc_clicked(e.data.node);
 	  });
 	  
+	  /* Updates DOM to notify user of the node that was clicked as well as how to calc distance. */
 	  function first_calc_clicked(n) {
 		calc1 = n;
 		document.getElementById("column3").innerHTML = 
 			'Hover over another node to calculate distance. Currently selected: <b>' + n.id + '</b>';
 	  }
 	  
+	  /* Updates DOM to display the distance between the selected node and the hovered node. */
 	  function hover_during_selected(n) {
 		document.getElementById("column3").innerHTML = 
 		    'Distance from <b>' + calc1.id + ' </b> to <b>' + n.id + ': ' + calc_distance(calc1.x, n.x, calc1.json.y, n.json.y);
 	  }
 	  
+	  /* Returns the distance between two nodes. */
 	  function calc_distance(x, x1, y, y1) {
 	    var offset = 0;
            if ((y % 2 == 1 && y1 % 2 == 0 && x1 <= x) ||
