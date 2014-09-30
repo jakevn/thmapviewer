@@ -197,6 +197,34 @@
         }
       }
       
+      function add_troops(city_node) {
+        for (i = 0; i < city_node.json.troops.length; i++) {
+            var troop = city_node.json.troops[i];
+            sig.graph.addNode({
+                id: '_troop_' + city_node.id + i,
+                label: city_node.id + '\'s ' + ((troop.state == "ReturningHome") ? 'Returning' : 'Attacking') +' Troop',
+                x: troop.x,
+                y: ~~(troop.y * 0.5),
+                size: 0.05,
+                color: (troop.state == "ReturningHome") ? '#33CC33' : '#FF0000'
+            });
+            sig.graph.addEdge({
+                id: 'e_tr' + i,
+                source: '_troop_' + city_node.id + i,
+                target: city_node.id
+            });
+        }
+      }
+      
+      function remove_troops() {
+        var nodes = sig.graph.nodes();
+        for (i = nodes.length - 1; i >= 0; i--) {
+            var check_node = nodes[i];
+            if (check_node.id.charAt(0) != '_') return;
+            sig.graph.dropNode(check_node.id);
+        }
+      }
+      
       /* Iterates through all nodes and generates edges to the hover-selected node if city owned by same Player. */
       function add_player_edges(root_node) {
         var nodes = sig.graph.nodes();
@@ -209,18 +237,19 @@
                 target: root_node.id
             });
         }
+        add_troops(root_node);
       }
-	  
+      
       /* Generates a black edge between click_selected and hover_selected. */
-	  function add_distance_edge() {
-		sig.graph.addEdge({
-			id: 'edist',
-			source: click_selected.id,
-			target: hover_selected.id,
-			color: '#232C16'
-		});
-	  }
-	  
+      function add_distance_edge() {
+        sig.graph.addEdge({
+            id: 'edist',
+            source: click_selected.id,
+            target: hover_selected.id,
+            color: '#232C16'
+        });
+      }
+      
       /* Removes all edges from the graph. */
       function reset_all_edges() {
         sig.graph.edges().forEach(function(e) {
@@ -228,6 +257,7 @@
         });
       }
       
+      /* Calls appropriate HTML-formatted info generator and updates the DOM. */
       function display_hover_info() {
         if (!hover_selected) return;
         var gen = '';
@@ -236,6 +266,7 @@
         document.getElementById("column2").innerHTML = gen;
       }
       
+      /* Generates HTML-formatted detailed info for hovered stronghold node. */
       function generate_stronghold_info(s) {
         return ['<b>Stronghold: ' + s.id + '</b>',
                 '<br>Level: ' + s.json.level,
@@ -248,22 +279,23 @@
                 ].join('\n');
       }
       
+      /* Generates HTML-formatted detailed info for hovered city node. */
       function generate_city_info(c) {
-        return ['<b>City: ' + c.id + '</b>',
-                '<br>Player: ' + c.player,
-                '<br>Tribe: ' + (!c.tribe ? 'None' : c.tribe),
-                '<br>X: ' + c.x,
-                '<br>Y: ' + c.y,
-                '<br>IP: ' + c.json.value,
-                '<br>Expense: ' + c.json.expense_value,
-                '<br>Loot Stolen: ' + c.json.loot_stolen,
-                '<br>Attack: ' + c.json.attack_points,
-                '<br>Defense: ' + c.json.defense_point,
-                '<br>Deployed Troops: ' + c.json.troops.length
+        return ['<b>City:</b> ' + c.id,
+                '<br><b>Player:</b> ' + c.player,
+                '<br><b>Tribe:</b> ' + (!c.tribe ? 'None' : c.tribe),
+                '<br><b>X:</b> ' + c.x,
+                '<br><b>Y:</b> ' + c.y,
+                '<br><b>IP:</b> ' + c.json.value,
+                '<br><b>Expense:</b> ' + c.json.expense_value,
+                '<br><b>Loot Stolen:</b> ' + c.json.loot_stolen,
+                '<br><b>Attack:</b> ' + c.json.attack_points,
+                '<br><b>Defense:</b> ' + c.json.defense_point,
+                '<br><b>Deployed Troops:</b> ' + c.json.troops.length
                 ].join('\n');
       }
       
-	  /* Takes a Date.toJSON formatted string (e.g. 2012-04-23T18:25:43.511Z) and returns elapsed days. */
+      /* Takes a Date.toJSON formatted string (e.g. 2012-04-23T18:25:43.511Z) and returns elapsed days. */
       function elapsed_days(date_string) {
         var unix_past = Date.parse(date_string);
         var unix_present = new Date().getTime();
@@ -274,21 +306,22 @@
       
       sig.bind('overNode', function(e) {
         reset_hover_selected();
-		hover_selected = e.data.node;
+        hover_selected = e.data.node;
         hover_selected.label = hover_selected.long_label;
-		
+        
         if (sig.graph.edges().length !== 0) return;
         if (hover_selected.group_by === 'tribe') add_tribe_edges(hover_selected);
         if (hover_selected.group_by === 'player') add_player_edges(hover_selected);
         if (click_selected && hover_selected != click_selected) show_distance(hover_selected);
-		
-		display_hover_info();
+        
+        display_hover_info();
         sig.refresh();
       });
         
       sig.bind('outNode', function(e) {
         reset_hover_selected();
         reset_all_edges();
+        remove_troops();
         document.getElementById("column2").innerHTML = '';
         sig.refresh();
       });
@@ -298,14 +331,14 @@
       /* Binds to Sigma.js event triggered by clicking on a node. */
       sig.bind('clickNode', function(e) {
         click_selected = e.data.node;
-		// Update DOM to notify user of clicked node and to hover another node for distance:
+        // Update DOM to notify user of clicked node and to hover another node for distance:
         document.getElementById("column3").innerHTML = 
             'Hover over another node to calculate distance. Currently selected: <b>' + click_selected.id + '</b>';
       });
       
       /* Updates DOM to display the distance between click_selected and hover_selected node. */
       function show_distance(n) {
-	    add_distance_edge();
+        add_distance_edge();
         document.getElementById("column3").innerHTML = 
             'Distance from <b>' + click_selected.id + ' </b> to <b>' + n.id + ': ' + calc_distance(click_selected.x, n.x, click_selected.json.y, n.json.y);
       }
