@@ -8,7 +8,7 @@
     background-color: #FFE9BF;
   } 
   #map {
-    max-width: 1080px;
+    max-width: 1440px;
     height: 720px;
     margin: auto;
     background-color: #BFD481;
@@ -16,7 +16,7 @@
     outline-color: #624221;
   }
   .content {
-    max-width: 1080px;
+    max-width: 1440px;
     height: 320px;
     padding: 3px;
     margin: auto;
@@ -134,9 +134,17 @@
         tribes[id] = tr.name;
         if ((tr.level == 1 && ~~tr.victory_points === 0) || colorCounter == colors.length) continue;
         tribeColors[id] = colors[colorCounter];
-        tribe_legend += '<b><font color=\"' + colors[colorCounter] + '\"> ' + tr.name + "</font></b><br>";
+        tribe_legend += '<span onmouseover="domTribeHover(this)"><b><font color=\"' + colors[colorCounter] + '\"> ' + tr.name + "</font></b></span><br>";
         tribe_legend += 'Level: ' + tr.level + ' AP: ' + tr.attack_points + ' DP: ' + tr.defense_points + ' VP: ' + ~~tr.victory_points + '<br>';
         colorCounter++;
+      }
+      
+      function domTribeHover(dom_obj) {
+        console.log(dom_obj);
+      }
+      
+      function add_tribe_edges_ts(tr_name) {
+        
       }
       
       document.getElementById("column1").innerHTML = tribe_legend;
@@ -202,11 +210,11 @@
             var troop = city_node.json.troops[i];
             sig.graph.addNode({
                 id: '_troop_' + city_node.id + i,
-                label: city_node.id + '\'s ' + ((troop.state == "ReturningHome") ? 'Returning' : 'Attacking') +' Troop',
+                label: city_node.id + '\'s ' + ((troop.state == "ReturningHome") ? 'Returning' : (troop.state == "Battle" ? 'Battling' : 'Attacking')) +' Troop',
                 x: troop.x,
                 y: ~~(troop.y * 0.5),
                 size: 0.05,
-                color: (troop.state == "ReturningHome") ? '#33CC33' : '#FF0000'
+                color: (troop.state == "ReturningHome") ? '#33CC33' : (troop.state == "Battle" ? '#FF0000' : '#E6E600')
             });
             sig.graph.addEdge({
                 id: 'e_tr' + i,
@@ -268,14 +276,14 @@
       
       /* Generates HTML-formatted detailed info for hovered stronghold node. */
       function generate_stronghold_info(s) {
-        return ['<b>Stronghold: ' + s.id + '</b>',
-                '<br>Level: ' + s.json.level,
-                '<br>Tribe: ' + (!s.tribe ? 'None' : s.tribe),
-                '<br>VPR: ' + (!s.tribe ? 'N/A' : ~~s.json.victory_point_rate),
-                '<br>X: ' + s.x,
-                '<br>Y: ' + s.y,
-                '<br>Gate Max HP: ' + s.json.gate_max,
-                '<br>Days Occupied: ' + (!s.tribe ? 'N/A' : elapsed_days(s.json.date_occupied)),
+        return ['<b>Stronghold:</b> ' + s.id,
+                '<br><b>Level:</b> ' + s.json.level,
+                '<br><b>Tribe:</b> ' + (!s.tribe ? 'None' : s.tribe),
+                '<br><b>VPR:</b> ' + (!s.tribe ? 'N/A' : ~~s.json.victory_point_rate),
+                '<br><b>X:</b> ' + s.x,
+                '<br><b>Y:</b> ' + s.y,
+                '<br><b>Gate Max HP:</b> ' + s.json.gate_max,
+                '<br><b>Days Occupied:</b> ' + (!s.tribe ? 'N/A' : elapsed_days(s.json.date_occupied)),
                 ].join('\n');
       }
       
