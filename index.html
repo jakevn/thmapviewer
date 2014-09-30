@@ -23,23 +23,30 @@
     color: 624221;
     text-align: left;
   }
-  #column1 {
+  #tribe_info {
     font: 13px arial, sans-serif;
     float: left;
     width: 300px;
   }
-  #column2 {
+  #hover_info {
     font: 18px arial, sans-serif;
     margin-left: auto;
     margin-right: auto;
     width: 240px;
   }
-  #column3 {
+  #dist_calc {
+    width: 320;
     text-align: center;
     font: 16px arial, sans-serif;
   }
-  #column4 {
-    float: right;
+  #span_content {
+  text-align: center;
+    margin-left: auto;
+    margin-right: auto;
+    font: 16px arial, sans-serif;
+  }
+  #search {
+    float: left;
   }
 </style>
 </head>
@@ -47,13 +54,13 @@
 <body>
 
 <div id="map"></div>
-<div class = "content">
-<p id="column3"> Click a node to calculate distance. </p>
-<p id="column1"></p>
-<p id="column2"></p>
-<p id="column4">
-
-</p>
+<div class="content">
+  <p id="span_content">
+  <input id="search" type="text" value="">
+  <span id="dist_calc"> Click a node to calculate distance. </span>
+  </p>
+  <p id="tribe_info"></p>
+  <p id="hover_info"></p>
 </div>
 
 <script src="js/sigma.min.js"></script>
@@ -84,7 +91,8 @@
           font: "helvetica",
           borderSize: 1,
           batchEdgesDrawing: true,
-          defaultNodeBorderColor: '#73675A'
+          defaultNodeBorderColor: '#73675A',
+          minEdgeSize: 0.1
         }
       });
 
@@ -134,20 +142,12 @@
         tribes[id] = tr.name;
         if ((tr.level == 1 && ~~tr.victory_points === 0) || colorCounter == colors.length) continue;
         tribeColors[id] = colors[colorCounter];
-        tribe_legend += '<span onmouseover="domTribeHover(this)"><b><font color=\"' + colors[colorCounter] + '\"> ' + tr.name + "</font></b></span><br>";
+        tribe_legend += '<b><font color=\"' + colors[colorCounter] + '\"> ' + tr.name + "</font></b><br>";
         tribe_legend += 'Level: ' + tr.level + ' AP: ' + tr.attack_points + ' DP: ' + tr.defense_points + ' VP: ' + ~~tr.victory_points + '<br>';
         colorCounter++;
       }
       
-      function domTribeHover(dom_obj) {
-        console.log(dom_obj);
-      }
-      
-      function add_tribe_edges_ts(tr_name) {
-        
-      }
-      
-      document.getElementById("column1").innerHTML = tribe_legend;
+      document.getElementById("tribe_info").innerHTML = tribe_legend;
       
       for (i = 0; i < jsonRes.cities.length; i++) {
         var city = jsonRes.cities[i];
@@ -219,7 +219,8 @@
             sig.graph.addEdge({
                 id: 'e_tr' + i,
                 source: '_troop_' + city_node.id + i,
-                target: city_node.id
+                target: city_node.id,
+                size: 0.2
             });
         }
       }
@@ -258,6 +259,62 @@
         });
       }
       
+      var match_pool;
+      var prev_search_len;
+      
+      /* Checks input string for potential matches and caches in-progress searches. */
+      function search_char_event() {
+        var s = document.getElementById("search").value;
+        if (prev_search_len && s.length < prev_search_len) { match_pool = null; if (modified_nodes) reset_modified_nodes();}
+        prev_search_len = s.length;
+        if (s.length < 4) return; // Too many matches will occur with less than 4 chars and minimum name is 4 chars anyway
+        var reg = new RegExp(s, "gi"); // Case-invariant match for input
+        if (!match_pool) {
+          match_pool = [];
+          var nodes = sig.graph.nodes();
+          for (i = 0; i < nodes.length; i++) {
+              if (reg.exec(nodes[i].id)) match_pool.push(nodes[i].id);
+          }
+        } else {
+          // Cull everything in match_pool that doesn't match the new input
+          for (i = 0; i < match_pool.length; i++) {
+            if (reg.exec(match_pool[i])) continue;
+            match_pool.splice(i, 1);
+            i--;
+          }
+        }
+        if (match_pool.length === 0 || match_pool.length > 8) return;
+        display_search_results(match_pool);
+      }
+      
+      document.getElementById("search").oninput = function() {search_char_event()};
+      
+      function display_search_results(match_arr) {
+        if (modified_nodes) reset_modified_nodes();
+        modified_nodes = [];
+        var nds = sig.graph.nodes(match_arr);
+        for (i = 0; i < nds.length; i++) {
+            if (!nds[i].orig_color) nds[i].orig_color = nds[i].color;
+            nds[i].color = '#0066FF';
+            if (!nds[i].orig_size) nds[i].orig_size = nds[i].size;
+            nds[i].size = Math.max(nds[i].size, 0.4);
+            modified_nodes.push(nds[i].id);
+        }
+        sig.refresh();
+      }
+      
+      var modified_nodes;
+      
+      function reset_modified_nodes() {
+        for (i = 0; i < modified_nodes.length; i++) {
+            var nds = sig.graph.nodes(modified_nodes[i]);
+            nds.color = nds.orig_color;
+            nds.size = nds.orig_size;
+        }
+        modified_nodes = null;
+        sig.refresh();
+      }
+      
       /* Removes all edges from the graph. */
       function reset_all_edges() {
         sig.graph.edges().forEach(function(e) {
@@ -271,7 +328,7 @@
         var gen = '';
         if (hover_selected.json.date_occupied) gen = generate_stronghold_info(hover_selected);
         else if (hover_selected.json.radius) gen = generate_city_info(hover_selected);
-        document.getElementById("column2").innerHTML = gen;
+        document.getElementById("hover_info").innerHTML = gen;
       }
       
       /* Generates HTML-formatted detailed info for hovered stronghold node. */
@@ -330,7 +387,7 @@
         reset_hover_selected();
         reset_all_edges();
         remove_troops();
-        document.getElementById("column2").innerHTML = '';
+        document.getElementById("hover_info").innerHTML = '';
         sig.refresh();
       });
       
@@ -340,14 +397,14 @@
       sig.bind('clickNode', function(e) {
         click_selected = e.data.node;
         // Update DOM to notify user of clicked node and to hover another node for distance:
-        document.getElementById("column3").innerHTML = 
+        document.getElementById("dist_calc").innerHTML = 
             'Hover over another node to calculate distance. Currently selected: <b>' + click_selected.id + '</b>';
       });
       
       /* Updates DOM to display the distance between click_selected and hover_selected node. */
       function show_distance(n) {
         add_distance_edge();
-        document.getElementById("column3").innerHTML = 
+        document.getElementById("dist_calc").innerHTML = 
             'Distance from <b>' + click_selected.id + ' </b> to <b>' + n.id + ': ' + calc_distance(click_selected.x, n.x, click_selected.json.y, n.json.y);
       }
       
@@ -361,7 +418,6 @@
            }
            return ~~((x1 > x ? x1 - x : x - x1) + (y1 > y ? y1 - y : y - y1) / 2 + offset);
       }
-
       sig.refresh();
     }
   };
