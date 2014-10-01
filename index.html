@@ -267,7 +267,7 @@
         var s = document.getElementById("search").value;
         if (prev_search_len && s.length < prev_search_len) { match_pool = null; if (modified_nodes) reset_modified_nodes();}
         prev_search_len = s.length;
-        if (s.length < 4) return; // Too many matches will occur with less than 4 chars and minimum name is 4 chars anyway
+        if (s.length < 3) return; // Too many matches will occur with less than 3 chars and minimum name is 3 chars anyway
         var reg = new RegExp(s, "gi"); // Case-invariant match for input
         if (!match_pool) {
           match_pool = [];
@@ -281,6 +281,7 @@
             if (reg.exec(match_pool[i])) continue;
             match_pool.splice(i, 1);
             i--;
+            if (match_pool.length === 0) reset_modified_nodes();
           }
         }
         if (match_pool.length === 0 || match_pool.length > 8) return;
