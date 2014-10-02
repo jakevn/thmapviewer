@@ -109,6 +109,7 @@ function spawn_barbs(json) {
     var row_y = 0; // Current Y row. Doesn't reset. End reached = gen completed
     var json_barbs = []; // Contains all barbs to be spawned for all regions
     json.barbarian_tribes = [];
+    
     // Move from left to right (x:0 to x:map_width), then reset X row and move down a Y row
     while (row_y + reg_height <= map_height) {
         while (row_x + reg_width <= map_width) {
@@ -117,7 +118,6 @@ function spawn_barbs(json) {
             gen_region_spawn_count(region);
             gen_region_barb_spawns(region);
             gen_region_barb_levels(region);
-            
             for (i = 0; i < region.new_barbs.length; i++) {
                 json_barbs.push(region.new_barbs[i]);
             }
@@ -134,7 +134,6 @@ function gen_region(bb, json) {
     var region_pad = 10; // Increase the size of the region by this amount to get close nodes from other regions
                          // This is necessary for distance calc reasons to prevent too-close nodes on region edges
     var region_nodes = [];
-    var avg_city_ip = 0; // Total IP of all cities in region divded by city count
     var city_ips = []; // Array of influence point values for each city
     var barb_levels = []; // Array of existing barb levels
     
@@ -154,16 +153,12 @@ function gen_region(bb, json) {
         if (bb_contains(json.cities[i], bb, region_pad)) {
             region_nodes.push(json.cities[i]);
             if (!bb_contains(json.cities[i], bb, 0)) continue;
-            avg_city_ip += json.cities[i].value;
             city_ips.push(json.cities[i].value);
         }
     }
     
-    if (json.cities.length > 1) avg_city_ip = avg_city_ip / json.cities.length;
-    
     return { bb: bb,
              nodes: region_nodes,
-             avg_city_ip: avg_city_ip,
              city_ips: city_ips,
              barb_levels: barb_levels,
              new_barbs: [] };
@@ -171,7 +166,7 @@ function gen_region(bb, json) {
 
 function gen_region_spawn_count(region) {
     var min_spawns = 1; // Each region should have at least this many barbs
-    var max_barb_region = 8; // Each region can have up to this many barbs
+    var max_barb_region = 9; // Each region can have up to this many barbs
     
     region.needed_spawns = min_spawns;
     if (region.city_ips.length === 0) return;
@@ -199,15 +194,14 @@ function gen_region_barb_levels(region) {
     for (i = 0; i < region.new_barbs.length; i++) {
         if (region.city_ips.length > i) {
             region.new_barbs[i].level = get_barb_level(region.city_ips[i]);
-            console.log(region.new_barbs[i].level);
         } else {
-            region.new_barbs[i].level = Math.floor((Math.random() * 9) + 1);
+            region.new_barbs[i].level = Math.floor((Math.random() * 10) + 1);
         }
     }
 }
 
 function get_barb_level(city_ip) {
-    var base = Math.min(6, ~~(city_ip / 50));
+    var base = Math.min(6, ~~(city_ip / 30));
     if (base < 1) base = 1;
     return base + Math.floor(Math.random() * 5);
 }
@@ -238,6 +232,7 @@ function bb_contains(point, bb, padding) {
 
 function barb_setup(json) {
     var barb_count = 0;
+    var levels = [0,0,0,0,0,0,0,0,0,0];
     for (i = 0; i < json.barbarian_tribes.length; i++) {
         var sh = json.barbarian_tribes[i];
         sig.graph.addNode({
@@ -250,9 +245,23 @@ function barb_setup(json) {
             long_label: 'Barbarian Tribe - Level: ' + sh.level + ' X: ' + sh.x + ' Y: ' + sh.y,
             json: sh
         });
-        barb_count++;
+        if (sh.x > 1100 && sh.x < 2300 && sh.y > 2200 && sh.y < 4200) {
+            levels[sh.level - 1]++;
+            barb_count++;
+        }
     }
-    console.log('Barb count: ' + barb_count);
+    console.log('Barbs near cities: ' + barb_count
+                               + '\nLvl1: ' + levels[0]
+                               + '\nLvl2: ' + levels[1]
+                               + '\nLvl3: ' + levels[2]
+                               + '\nLvl4: ' + levels[3]
+                               + '\nLvl5: ' + levels[4]
+                               + '\nLvl6: ' + levels[5]
+                               + '\nLvl7: ' + levels[6]
+                               + '\nLvl8: ' + levels[7]
+                               + '\nLvl9: ' + levels[8]
+                               + '\nLvl10: ' + levels[9]
+               );
 }
 
 /* Parses a string input and returns the JSON object. */
