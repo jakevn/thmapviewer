@@ -88,6 +88,7 @@ var tribeColors = {}; // tribe id -> hex color string
 function setup(response_string) {
     var json = parse_json(response_string);
     graph_setup();
+    spawn_barbs(json);
     barb_setup(json);
     player_setup(json);
     tribe_setup(json);
@@ -97,18 +98,156 @@ function setup(response_string) {
     sig.refresh();
 }
 
+/* Defines regions and generates barbs for each region. Returns array of all new barb camps. */
+function spawn_barbs(json) {
+    var map_width = 3400;
+    var map_height = 6200;
+    var reg_width = 100; // Region x-size is row_x + reg_width
+    var reg_height = 200; // Region y-size is row_y + reg_height
+    
+    var row_x = 0; // Current region X row. End reached = reset and move to next Y row
+    var row_y = 0; // Current Y row. Doesn't reset. End reached = gen completed
+    var json_barbs = []; // Contains all barbs to be spawned for all regions
+    json.barbarian_tribes = [];
+    // Move from left to right (x:0 to x:map_width), then reset X row and move down a Y row
+    while (row_y + reg_height <= map_height) {
+        while (row_x + reg_width <= map_width) {
+            var bb = { x: row_x, y: row_y, width: reg_width, height: reg_height }; // Region bounding-box
+            var region = gen_region(bb, json);
+            gen_region_spawn_count(region);
+            gen_region_barb_spawns(region);
+            gen_region_barb_levels(region);
+            
+            for (i = 0; i < region.new_barbs.length; i++) {
+                json_barbs.push(region.new_barbs[i]);
+            }
+            row_x += reg_width;
+        }
+        row_y += reg_height;
+        row_x = 0;
+    }
+    json.barbarian_tribes = json_barbs;
+}
+
+/* Returns a region object that contains data needed for barb spawn gen */
+function gen_region(bb, json) {
+    var region_pad = 10; // Increase the size of the region by this amount to get close nodes from other regions
+                         // This is necessary for distance calc reasons to prevent too-close nodes on region edges
+    var region_nodes = [];
+    var avg_city_ip = 0; // Total IP of all cities in region divded by city count
+    var city_ips = []; // Array of influence point values for each city
+    var barb_levels = []; // Array of existing barb levels
+    
+    for (i = 0; i < json.strongholds.length; i++) {
+        if (bb_contains(json.strongholds[i], bb, region_pad)) region_nodes.push(json.strongholds[i]);
+    }
+    
+    for (i = 0; i < json.barbarian_tribes.length; i++) {
+        if (bb_contains(json.barbarian_tribes[i], bb, region_pad)) {
+            region_nodes.push(json.barbarian_tribes[i]);
+            if (!bb_contains(json.barbarian_tribes[i], bb, 0)) continue;
+            barb_levels.push(json.barbarian_tribes[i].level);
+        }
+    }
+    
+    for (i = 0; i < json.cities.length; i++) {
+        if (bb_contains(json.cities[i], bb, region_pad)) {
+            region_nodes.push(json.cities[i]);
+            if (!bb_contains(json.cities[i], bb, 0)) continue;
+            avg_city_ip += json.cities[i].value;
+            city_ips.push(json.cities[i].value);
+        }
+    }
+    
+    if (json.cities.length > 1) avg_city_ip = avg_city_ip / json.cities.length;
+    
+    return { bb: bb,
+             nodes: region_nodes,
+             avg_city_ip: avg_city_ip,
+             city_ips: city_ips,
+             barb_levels: barb_levels,
+             new_barbs: [] };
+}
+
+function gen_region_spawn_count(region) {
+    var min_spawns = 1; // Each region should have at least this many barbs
+    var max_barb_region = 8; // Each region can have up to this many barbs
+    
+    region.needed_spawns = min_spawns;
+    if (region.city_ips.length === 0) return;
+    region.needed_spawns += region.city_ips.length;
+    if (region.needed_spawns > max_barb_region) region.needed_spawns = max_barb_region;
+    region.needed_spawns -= region.barb_levels.length;
+    region.needed_spawns = Math.max(0, region.needed_spawns);
+}
+
+function gen_region_barb_spawns(region) {   
+    var max_tries = 128; // The maximum number of valid point generation attempts
+    var min_dist = 10; // The minimum distance a barb spawn must be from all nodes in region
+    
+    while (max_tries > 0 && region.new_barbs.length < region.needed_spawns) {
+        max_tries--;
+        var point = random_point(region.bb.x, region.bb.width, region.bb.y, region.bb.height);
+        if (!safe_distance(point, region.nodes, min_dist)) continue;
+        if (!safe_distance(point, region.new_barbs, min_dist)) continue;
+        region.new_barbs.push(point);
+    }
+}
+
+function gen_region_barb_levels(region) {
+    region.city_ips.sort(function(a, b){return b-a});
+    for (i = 0; i < region.new_barbs.length; i++) {
+        if (region.city_ips.length > i) {
+            region.new_barbs[i].level = get_barb_level(region.city_ips[i]);
+            console.log(region.new_barbs[i].level);
+        } else {
+            region.new_barbs[i].level = Math.floor((Math.random() * 9) + 1);
+        }
+    }
+}
+
+function get_barb_level(city_ip) {
+    var base = Math.min(6, ~~(city_ip / 50));
+    if (base < 1) base = 1;
+    return base + Math.floor(Math.random() * 5);
+}
+
+/* Returns true if point is at least mindist away from every point in points_array */
+function safe_distance(point, points_array, mindist) {
+    for (i = 0; i < points_array.length; i++) {
+        if (calc_distance(point.x, points_array[i].x, point.y, points_array[i].y) < mindist) return false;
+    }
+    return true;
+}
+
+/* Returns an object with random x & y values constrained by min/max args */
+function random_point(x_min, x_max, y_min, y_max) {
+    return { 
+        x: ~~((Math.random() * x_max) + x_min),
+        y: ~~((Math.random() * y_max) + y_min)
+    };
+}
+
+/* Returns true if the provided point is contained by the provided bounding box enlarged by optional padding */
+function bb_contains(point, bb, padding) {
+    return (point.x >= bb.x - padding
+            && point.x <= (bb.x + bb.width + padding)
+            && point.y >= bb.y - padding
+            && point.y <= (bb.y + bb.height + padding));
+}
+
 function barb_setup(json) {
     var barb_count = 0;
     for (i = 0; i < json.barbarian_tribes.length; i++) {
         var sh = json.barbarian_tribes[i];
         sig.graph.addNode({
-            id: 'Barbarian Tribe ' + i,
-            label: 'Barbarian Tribe ' + i,
+            id: 'Barb' + i + ' lvl ' + sh.level,
+            label: 'Barb' + i + ' lvl ' + sh.level,
             x: sh.x,
             y: ~~(sh.y * 0.5),
             size: 0.1,
             color: '#0066FF',
-            long_label: 'Barbarian Tribe - Level: ' + sh.level + ' Remain: ' + sh.camps_remaining + ' X: ' + sh.x + ' Y: ' + sh.y,
+            long_label: 'Barbarian Tribe - Level: ' + sh.level + ' X: ' + sh.x + ' Y: ' + sh.y,
             json: sh
         });
         barb_count++;
@@ -118,12 +257,7 @@ function barb_setup(json) {
 
 /* Parses a string input and returns the JSON object. */
 function parse_json(s) {
-    return JSON.parse(s, function (k, v) {
-        if (k === "forests") {
-            return undefined;
-        }
-        return v;
-    });
+    return JSON.parse(s);
 }
 
 /* Instantiates the sigma.js graph with configuration and binds to graph events. */
