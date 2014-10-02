@@ -56,7 +56,7 @@
 <div id="map"></div>
 <div class="content">
   <p id="span_content">
-  <input id="search" type="text" size="28" placeholder="Search..." value="">
+  <input id="search" type="text" size="28" placeholder="Highlight stronghold or city..." value="">
   <span id="dist_calc"> Click a node to calculate distance. </span>
   </p>
   <p id="tribe_info"></p>
@@ -65,22 +65,50 @@
 
 <script src="js/sigma.min.js"></script>
 <script>
-  var client = new XMLHttpRequest();
 
-  client.overrideMimeType("text/javascript");
-  client.open('GET', 'http://tribblez.tribalhero.com/map.json', true);
-  client.onreadystatechange = function() {
+// Create request for retrieving JSON data and perform setup if successful:
+var client = new XMLHttpRequest();
+client.overrideMimeType("text/javascript");
+client.open('GET', 'http://tribblez.tribalhero.com/map.json', true);
+client.onreadystatechange = function() {
     if (client.readyState === 4) {
-      var res = client.responseText;
+      setup(client.responseText);
+    }
+};
+client.send();
 
-      var jsonRes = JSON.parse(res, function (k, v) {
-          if (k === "barbarian_tribes" || k === "forests") {
+var sig; // sigma.js graph which performs map rendering
+var tribes = {}; // tribe id -> tribe name lookup
+var players = {}; // player id -> player name lookup
+var playersRev = {}; // player name -> player id lookup
+var playerTribes = {}; // player id -> tribe id lookup
+var tribeColors = {}; // tribe id -> hex color string
+
+/* Calls all functions for initial configuration. */
+function setup(response_string) {
+    var json = parse_json(response_string);
+    graph_setup();
+    player_setup(json);
+    tribe_setup(json);
+    city_setup(json);
+    stronghold_setup(json);
+    document.getElementById("search").oninput = function() {search_char_event();};
+    sig.refresh();
+}
+
+/* Parses a string input and returns the JSON object. */
+function parse_json(s) {
+    return JSON.parse(s, function (k, v) {
+        if (k === "barbarian_tribes" || k === "forests") {
             return undefined;
-          }
-          return v;
-      });
+        }
+        return v;
+    });
+}
 
-      var sig = new sigma({
+/* Instantiates the sigma.js graph with configuration and binds to graph events. */
+function graph_setup() {
+    sig = new sigma({
         container: 'map',
         settings: {
           defaultLabelColor: '#73675A',
@@ -94,64 +122,70 @@
           defaultNodeBorderColor: '#73675A',
           minEdgeSize: 0.1
         }
-      });
+    });
 
-      var tribes = [];
-      var players = [];
-      var playersRev = [];
-      var playerTribes = [];
-      var tribeColors = [];
+    sig.bind('clickNode', function(e) {
+        click_selected = e.data.node;
+        // Update DOM to notify user of clicked node and to hover another node for distance:
+        document.getElementById("dist_calc").innerHTML = 
+            'Hover over another node to calculate distance. Currently selected: <b>' + click_selected.id + '</b>';
+    });
 
-      var colorCounter = 0;
-      var colors = [
-          '#FFB300',
-          '#803E75',
-          '#FF6800',
-          '#A6BDD7',
-          '#C10020',
-          '#CEA262',
-          '#817066',
+    sig.bind('overNode', function(e) {
+        reset_hover_selected();
+        hover_selected = e.data.node;
+        hover_selected.label = hover_selected.long_label;
 
-          '#007D34',
-          '#F6768E',
-          '#00538A',
-          '#FF7A5C',
-          '#53377A',
-          '#FF8E00',
-          '#B32851',
-          '#F4C800',
-          '#7F180D',
-          '#93AA00',
-          '#593315',
-          '#F13A13'
-          ];
+        if (sig.graph.edges().length !== 0) return;
+        if (hover_selected.group_by === 'tribe') add_tribe_edges(hover_selected);
+        if (hover_selected.group_by === 'player') add_player_edges(hover_selected);
+        if (click_selected && hover_selected != click_selected) show_distance(hover_selected);
 
-      for (i = 0; i < jsonRes.players.length; i++) {
-        var pl = jsonRes.players[i];
+        display_hover_info();
+        sig.refresh();
+    });
+
+    sig.bind('outNode', function(e) {
+        reset_hover_selected();
+        reset_all_edges();
+        remove_troops();
+        document.getElementById("hover_info").innerHTML = '';
+        sig.refresh();
+    });
+}
+
+/* Populates player name lookups. */
+function player_setup(json) {
+    for (i = 0; i < json.players.length; i++) {
+        var pl = json.players[i];
         players[pl.id] = pl.name;
         playersRev[pl.name] = pl.id;
         if (!pl.tribe_id) continue;
         playerTribes[pl.id] = pl.tribe_id;
-      }
-      
-      var tribe_legend = '';
-      
-      for (i = 0; i < jsonRes.tribes.length; i++) {
-        var tr = jsonRes.tribes[i];
+    }
+}
+
+/* Populates tribe name lookup, generates tribe overview HTML, and assigns colours to eligible tribes. */
+function tribe_setup(json) {
+    var colors = ['#FFB300','#803E75','#FF6800','#A6BDD7','#C10020','#CEA262','#817066','#007D34','#F6768E','#00538A','#FF7A5C','#53377A','#FF8E00','#B32851','#F4C800','#7F180D','#93AA00','#593315','#F13A13'];
+    var tribe_legend = '';
+    for (i = 0; i < json.tribes.length; i++) {
+        var tr = json.tribes[i];
         var id = playerTribes[tr.owner_player_id];
         tribes[id] = tr.name;
-        if ((tr.level == 1 && ~~tr.victory_points === 0) || colorCounter == colors.length) continue;
-        tribeColors[id] = colors[colorCounter];
-        tribe_legend += '<b><font color=\"' + colors[colorCounter] + '\"> ' + tr.name + "</font></b><br>";
+        if ((tr.level == 1 && ~~tr.victory_points === 0) || colors.length === 0) continue;
+        tribeColors[id] = colors.shift();
+        tribe_legend += '<b><font color=\"' + tribeColors[id] + '\"> ' + tr.name + "</font></b><br>";
         tribe_legend += 'Level: ' + tr.level + ' AP: ' + tr.attack_points + ' DP: ' + tr.defense_points + ' VP: ' + ~~tr.victory_points + '<br>';
-        colorCounter++;
-      }
-      
-      document.getElementById("tribe_info").innerHTML = tribe_legend;
-      
-      for (i = 0; i < jsonRes.cities.length; i++) {
-        var city = jsonRes.cities[i];
-          sig.graph.addNode({
+    }
+    document.getElementById("tribe_info").innerHTML = tribe_legend;
+}
+
+/* Generates nodes for city data from the JSON object. */
+function city_setup(json) {
+    for (i = 0; i < json.cities.length; i++) {
+        var city = json.cities[i];
+        sig.graph.addNode({
             id: city.name,
             label: city.name,
             x: city.x,
@@ -163,12 +197,15 @@
             long_label: city.name + " - Player: " + players[city.player_id] + " Tribe: " + tribes[playerTribes[city.player_id]],
             group_by: 'player',
             json: city
-          });
-      }
+        });
+    }
+}
 
-      for (i = 0; i < jsonRes.strongholds.length; i++) {
-        var sh = jsonRes.strongholds[i];
-          sig.graph.addNode({
+/* Generates nodes for stronghold data from the JSON object. */
+function stronghold_setup(json) {
+    for (i = 0; i < json.strongholds.length; i++) {
+        var sh = json.strongholds[i];
+        sig.graph.addNode({
             id: sh.name,
             label: sh.name,
             x: sh.x,
@@ -179,250 +216,218 @@
             long_label: sh.name + " - Level: " + sh.level + " VPR: " + ~~sh.victory_point_rate + " Tribe: " + tribes[sh.owner_tribe_id],
             group_by: 'tribe',
             json: sh
-          });
-      }
-      
-      var hover_selected; // The current hover-selected node.
-      
-      /* Resets the label for the node that was hover selected. */
-      function reset_hover_selected() {
-        if (!hover_selected) return;
-        hover_selected.label = hover_selected.id;
-      }
-      
-      /* Iterates through all nodes and generates edges to the hover-selected node if in same tribe. */
-      function add_tribe_edges(root_node) {
-        if (!root_node.tribe) return;
-        var nodes = sig.graph.nodes();
-        for (i = 0; i < nodes.length; i++) {
-            var check_node = nodes[i];
-            if (check_node.id === root_node.id || check_node.tribe !== root_node.tribe) continue;
-            sig.graph.addEdge({
-                id: 'e' + i,
-                source: check_node.id,
-                target: root_node.id
-            });
-        }
-      }
-      
-      function add_troops(city_node) {
-        for (i = 0; i < city_node.json.troops.length; i++) {
-            var troop = city_node.json.troops[i];
-            sig.graph.addNode({
-                id: '_troop_' + city_node.id + i,
-                label: city_node.id + '\'s ' + ((troop.state == "ReturningHome") ? 'Returning' : (troop.state == "Battle" ? 'Battling' : 'Attacking')) +' Troop',
-                x: troop.x,
-                y: ~~(troop.y * 0.5),
-                size: 0.05,
-                color: (troop.state == "ReturningHome") ? '#33CC33' : (troop.state == "Battle" ? '#FF0000' : '#E6E600')
-            });
-            sig.graph.addEdge({
-                id: 'e_tr' + i,
-                source: '_troop_' + city_node.id + i,
-                target: city_node.id,
-                size: 0.2
-            });
-        }
-      }
-      
-      function remove_troops() {
-        var nodes = sig.graph.nodes();
-        for (i = nodes.length - 1; i >= 0; i--) {
-            var check_node = nodes[i];
-            if (check_node.id.charAt(0) != '_') return;
-            sig.graph.dropNode(check_node.id);
-        }
-      }
-      
-      /* Iterates through all nodes and generates edges to the hover-selected node if city owned by same Player. */
-      function add_player_edges(root_node) {
-        var nodes = sig.graph.nodes();
-        for (i = 0; i < nodes.length; i++) {
-            var check_node = nodes[i];
-            if (check_node.id === root_node.id || check_node.player !== root_node.player) continue;
-            sig.graph.addEdge({
-                id: 'e' + i,
-                source: check_node.id,
-                target: root_node.id
-            });
-        }
-        add_troops(root_node);
-      }
-      
-      /* Generates a black edge between click_selected and hover_selected. */
-      function add_distance_edge() {
-        sig.graph.addEdge({
-            id: 'edist',
-            source: click_selected.id,
-            target: hover_selected.id,
-            color: '#232C16'
         });
-      }
-      
-      var match_pool;
-      var prev_search_len;
-      
-      /* Checks input string for potential matches and caches in-progress searches. */
-      function search_char_event() {
-        var s = document.getElementById("search").value;
-        if (prev_search_len && s.length < prev_search_len) { match_pool = null; if (modified_nodes) reset_modified_nodes();}
-        prev_search_len = s.length;
-        if (s.length < 3) return; // Too many matches will occur with less than 3 chars and minimum name is 3 chars anyway
-        var reg = new RegExp(s, "gi"); // Case-invariant match for input
-        if (!match_pool) {
-          match_pool = [];
-          var nodes = sig.graph.nodes();
-          for (i = 0; i < nodes.length; i++) {
-              if (reg.exec(nodes[i].id)) match_pool.push(nodes[i].id);
-          }
-        } else {
-          // Cull everything in match_pool that doesn't match the new input
-          for (i = 0; i < match_pool.length; i++) {
+    }
+}
+
+var hover_selected; // The current hover-selected node.
+
+/* Resets the label for the node that was hover selected. */
+function reset_hover_selected() {
+    if (!hover_selected) return;
+    hover_selected.label = hover_selected.id;
+}
+
+/* Iterates through all nodes and generates edges to the hover-selected node if in same tribe. */
+function add_tribe_edges(root_node) {
+    if (!root_node.tribe) return;
+    var nodes = sig.graph.nodes();
+    for (i = 0; i < nodes.length; i++) {
+        var check_node = nodes[i];
+        if (check_node.id === root_node.id || check_node.tribe !== root_node.tribe) continue;
+        sig.graph.addEdge({
+            id: 'e' + i,
+            source: check_node.id,
+            target: root_node.id
+        });
+    }
+}
+
+/* Generates nodes to represent the troops of city and also generates edges to connect troop to city. */
+function add_troops(city_node) {
+    for (i = 0; i < city_node.json.troops.length; i++) {
+        var troop = city_node.json.troops[i];
+        sig.graph.addNode({
+            id: '_troop_' + city_node.id + i,
+            label: city_node.id + '\'s ' + ((troop.state == "ReturningHome") ? 'Returning' : (troop.state == "Battle" ? 'Battling' : 'Attacking')) +' Troop',
+            x: troop.x,
+            y: ~~(troop.y * 0.5),
+            size: 0.05,
+            color: (troop.state == "ReturningHome") ? '#33CC33' : (troop.state == "Battle" ? '#FF0000' : '#E6E600')
+        });
+        sig.graph.addEdge({
+            id: 'e_tr' + i,
+            source: '_troop_' + city_node.id + i,
+            target: city_node.id,
+            size: 0.2
+        });
+    }
+}
+
+/* Removes from graph the nodes that were generated to represent a city's troops. */
+function remove_troops() {
+    var nodes = sig.graph.nodes();
+    for (i = nodes.length - 1; i >= 0; i--) {
+        var check_node = nodes[i];
+        if (check_node.id.charAt(0) != '_') return;
+        sig.graph.dropNode(check_node.id);
+    }
+}
+
+/* Iterates through all nodes and generates edges to the hover-selected node if city owned by same Player. */
+function add_player_edges(root_node) {
+    var nodes = sig.graph.nodes();
+    for (i = 0; i < nodes.length; i++) {
+        var check_node = nodes[i];
+        if (check_node.id === root_node.id || check_node.player !== root_node.player) continue;
+        sig.graph.addEdge({
+            id: 'e' + i,
+            source: check_node.id,
+            target: root_node.id
+        });
+    }
+    add_troops(root_node);
+}
+
+/* Generates a black edge between click_selected and hover_selected. */
+function add_distance_edge() {
+    sig.graph.addEdge({
+        id: 'edist',
+        source: click_selected.id,
+        target: hover_selected.id,
+        color: '#232C16'
+    });
+}
+
+var match_pool; // Contains an array of node ids that currently contain the search string.
+var prev_search_len; // The number of chars in the search string during the last run of search_char_event()
+
+/* Checks input string for potential matches and caches in-progress searches. */
+function search_char_event() {
+    var s = document.getElementById("search").value;
+    if (prev_search_len && s.length < prev_search_len) { 
+        match_pool = null; if (modified_nodes) reset_modified_nodes();
+    }
+    prev_search_len = s.length;
+    if (s.length < 3) return; // Too many matches will occur with less than 3 chars and minimum name is 3 chars anyway
+    var reg = new RegExp(s, "gi"); // Case-invariant match for input
+    if (!match_pool) {
+        match_pool = [];
+        var nodes = sig.graph.nodes();
+        for (i = 0; i < nodes.length; i++) {
+            if (reg.exec(nodes[i].id)) match_pool.push(nodes[i].id);
+        }
+    } else {
+    // Cull everything in match_pool that doesn't match the new input
+        for (i = 0; i < match_pool.length; i++) {
             if (reg.exec(match_pool[i])) continue;
             match_pool.splice(i, 1);
             i--;
             if (match_pool.length === 0) reset_modified_nodes();
-          }
         }
-        if (match_pool.length === 0 || match_pool.length > 8) return;
-        display_search_results(match_pool);
-      }
-      
-      document.getElementById("search").oninput = function() {search_char_event()};
-      
-      function display_search_results(match_arr) {
-        if (modified_nodes) reset_modified_nodes();
-        modified_nodes = [];
-        var nds = sig.graph.nodes(match_arr);
-        for (i = 0; i < nds.length; i++) {
-            if (!nds[i].orig_color) nds[i].orig_color = nds[i].color;
-            nds[i].color = '#0066FF';
-            if (!nds[i].orig_size) nds[i].orig_size = nds[i].size;
-            nds[i].size = Math.max(nds[i].size, 0.4);
-            modified_nodes.push(nds[i].id);
-        }
-        sig.refresh();
-      }
-      
-      var modified_nodes;
-      
-      function reset_modified_nodes() {
-        for (i = 0; i < modified_nodes.length; i++) {
-            var nds = sig.graph.nodes(modified_nodes[i]);
-            nds.color = nds.orig_color;
-            nds.size = nds.orig_size;
-        }
-        modified_nodes = null;
-        sig.refresh();
-      }
-      
-      /* Removes all edges from the graph. */
-      function reset_all_edges() {
-        sig.graph.edges().forEach(function(e) {
-            sig.graph.dropEdge(e.id);
-        });
-      }
-      
-      /* Calls appropriate HTML-formatted info generator and updates the DOM. */
-      function display_hover_info() {
-        if (!hover_selected) return;
-        var gen = '';
-        if (hover_selected.json.date_occupied) gen = generate_stronghold_info(hover_selected);
-        else if (hover_selected.json.radius) gen = generate_city_info(hover_selected);
-        document.getElementById("hover_info").innerHTML = gen;
-      }
-      
-      /* Generates HTML-formatted detailed info for hovered stronghold node. */
-      function generate_stronghold_info(s) {
-        return ['<b>Stronghold:</b> ' + s.id,
-                '<br><b>Level:</b> ' + s.json.level,
-                '<br><b>Tribe:</b> ' + (!s.tribe ? 'None' : s.tribe),
-                '<br><b>VPR:</b> ' + (!s.tribe ? 'N/A' : ~~s.json.victory_point_rate),
-                '<br><b>X:</b> ' + s.x,
-                '<br><b>Y:</b> ' + s.y,
-                '<br><b>Gate Max HP:</b> ' + s.json.gate_max,
-                '<br><b>Days Occupied:</b> ' + (!s.tribe ? 'N/A' : elapsed_days(s.json.date_occupied)),
-                ].join('\n');
-      }
-      
-      /* Generates HTML-formatted detailed info for hovered city node. */
-      function generate_city_info(c) {
-        return ['<b>City:</b> ' + c.id,
-                '<br><b>Player:</b> ' + c.player,
-                '<br><b>Tribe:</b> ' + (!c.tribe ? 'None' : c.tribe),
-                '<br><b>X:</b> ' + c.x,
-                '<br><b>Y:</b> ' + c.y,
-                '<br><b>IP:</b> ' + c.json.value,
-                '<br><b>Expense:</b> ' + c.json.expense_value,
-                '<br><b>Loot Stolen:</b> ' + c.json.loot_stolen,
-                '<br><b>Attack:</b> ' + c.json.attack_points,
-                '<br><b>Defense:</b> ' + c.json.defense_point,
-                '<br><b>Deployed Troops:</b> ' + c.json.troops.length
-                ].join('\n');
-      }
-      
-      /* Takes a Date.toJSON formatted string (e.g. 2012-04-23T18:25:43.511Z) and returns elapsed days. */
-      function elapsed_days(date_string) {
-        var unix_past = Date.parse(date_string);
-        var unix_present = new Date().getTime();
-        var diff = unix_present - unix_past;
-        var days = (diff / (1000*60*60*24)).toString();
-        return days.length > 4 ? days.substr(0, 4) : days;
-      }
-      
-      sig.bind('overNode', function(e) {
-        reset_hover_selected();
-        hover_selected = e.data.node;
-        hover_selected.label = hover_selected.long_label;
-        
-        if (sig.graph.edges().length !== 0) return;
-        if (hover_selected.group_by === 'tribe') add_tribe_edges(hover_selected);
-        if (hover_selected.group_by === 'player') add_player_edges(hover_selected);
-        if (click_selected && hover_selected != click_selected) show_distance(hover_selected);
-        
-        display_hover_info();
-        sig.refresh();
-      });
-        
-      sig.bind('outNode', function(e) {
-        reset_hover_selected();
-        reset_all_edges();
-        remove_troops();
-        document.getElementById("hover_info").innerHTML = '';
-        sig.refresh();
-      });
-      
-      var click_selected; // The current click-selected node.
-      
-      /* Binds to Sigma.js event triggered by clicking on a node. */
-      sig.bind('clickNode', function(e) {
-        click_selected = e.data.node;
-        // Update DOM to notify user of clicked node and to hover another node for distance:
-        document.getElementById("dist_calc").innerHTML = 
-            'Hover over another node to calculate distance. Currently selected: <b>' + click_selected.id + '</b>';
-      });
-      
-      /* Updates DOM to display the distance between click_selected and hover_selected node. */
-      function show_distance(n) {
-        add_distance_edge();
-        document.getElementById("dist_calc").innerHTML = 
-            'Distance from <b>' + click_selected.id + ' </b> to <b>' + n.id + ': ' + calc_distance(click_selected.x, n.x, click_selected.json.y, n.json.y);
-      }
-      
-      /* Returns the distance between two nodes. */
-      function calc_distance(x, x1, y, y1) {
-        var offset = 0;
-           if ((y % 2 == 1 && y1 % 2 == 0 && x1 <= x) ||
-               (y % 2 == 0 && y1 % 2 == 1 && x1 >= x))
-           {
-               offset = 1;
-           }
-           return ~~((x1 > x ? x1 - x : x - x1) + (y1 > y ? y1 - y : y - y1) / 2 + offset);
-      }
-      sig.refresh();
     }
-  };
-  client.send();
+    if (match_pool.length === 0 || match_pool.length > 8) return;
+    display_search_results(match_pool);
+}
+
+/* Modifies nodes to highlight that they match the search criteria. */
+function display_search_results(match_arr) {
+    if (modified_nodes) reset_modified_nodes();
+    modified_nodes = [];
+    var nds = sig.graph.nodes(match_arr);
+    for (i = 0; i < nds.length; i++) {
+        if (!nds[i].orig_color) nds[i].orig_color = nds[i].color;
+        nds[i].color = '#0066FF';
+        if (!nds[i].orig_size) nds[i].orig_size = nds[i].size;
+        nds[i].size = Math.max(nds[i].size, 0.4);
+        modified_nodes.push(nds[i].id);
+    }
+    sig.refresh();
+}
+
+var modified_nodes; // When non-null, contains list of nodes that currently have modified color/size
+
+/* Returns modified nodes to their original size/color and resets modified_nodes to null. */
+function reset_modified_nodes() {
+    for (i = 0; i < modified_nodes.length; i++) {
+        var nds = sig.graph.nodes(modified_nodes[i]);
+        nds.color = nds.orig_color;
+        nds.size = nds.orig_size;
+    }
+    modified_nodes = null;
+    sig.refresh();
+}
+
+/* Removes all edges from the graph. */
+function reset_all_edges() {
+    sig.graph.edges().forEach(function(e) {
+        sig.graph.dropEdge(e.id);
+    });
+}
+
+/* Calls appropriate HTML-formatted info generator and updates the DOM. */
+function display_hover_info() {
+    if (!hover_selected) return;
+    var gen = '';
+    if (hover_selected.json.date_occupied) gen = generate_stronghold_info(hover_selected);
+    else if (hover_selected.json.radius) gen = generate_city_info(hover_selected);
+    document.getElementById("hover_info").innerHTML = gen;
+}
+
+/* Generates HTML-formatted detailed info for hovered stronghold node. */
+function generate_stronghold_info(s) {
+    return ['<b>Stronghold:</b> ' + s.id,
+            '<br><b>Level:</b> ' + s.json.level,
+            '<br><b>Tribe:</b> ' + (!s.tribe ? 'None' : s.tribe),
+            '<br><b>VPR:</b> ' + (!s.tribe ? 'N/A' : ~~s.json.victory_point_rate),
+            '<br><b>X:</b> ' + s.x,
+            '<br><b>Y:</b> ' + s.y,
+            '<br><b>Gate Max HP:</b> ' + s.json.gate_max,
+            '<br><b>Days Occupied:</b> ' + (!s.tribe ? 'N/A' : elapsed_days(s.json.date_occupied))
+            ].join('\n');
+}
+
+/* Generates HTML-formatted detailed info for hovered city node. */
+function generate_city_info(c) {
+    return ['<b>City:</b> ' + c.id,
+            '<br><b>Player:</b> ' + c.player,
+            '<br><b>Tribe:</b> ' + (!c.tribe ? 'None' : c.tribe),
+            '<br><b>X:</b> ' + c.x,
+            '<br><b>Y:</b> ' + c.y,
+            '<br><b>IP:</b> ' + c.json.value,
+            '<br><b>Expense:</b> ' + c.json.expense_value,
+            '<br><b>Loot Stolen:</b> ' + c.json.loot_stolen,
+            '<br><b>Attack:</b> ' + c.json.attack_points,
+            '<br><b>Defense:</b> ' + c.json.defense_point,
+            '<br><b>Deployed Troops:</b> ' + c.json.troops.length
+            ].join('\n');
+}
+
+/* Takes a Date.toJSON formatted string (e.g. 2012-04-23T18:25:43.511Z) and returns elapsed days. */
+function elapsed_days(date_string) {
+    var unix_past = Date.parse(date_string);
+    var unix_present = new Date().getTime();
+    var diff = unix_present - unix_past;
+    var days = (diff / (1000*60*60*24)).toString();
+    return days.length > 4 ? days.substr(0, 4) : days;
+}
+
+var click_selected; // The current click-selected node.
+
+/* Updates DOM to display the distance between click_selected and hover_selected node. */
+function show_distance(n) {
+    add_distance_edge();
+    document.getElementById("dist_calc").innerHTML = 
+        'Distance from <b>' + click_selected.id + ' </b> to <b>' + n.id + ': ' + calc_distance(click_selected.x, n.x, click_selected.json.y, n.json.y);
+}
+
+/* Returns the distance between two nodes. */
+function calc_distance(x, x1, y, y1) {
+    var offset = 0;
+    if ((y % 2 == 1 && y1 % 2 === 0 && x1 <= x) || (y % 2 === 0 && y1 % 2 == 1 && x1 >= x)) offset = 1;
+    return ~~((x1 > x ? x1 - x : x - x1) + (y1 > y ? y1 - y : y - y1) / 2 + offset);
+}
+
 </script>
     
 </body>
